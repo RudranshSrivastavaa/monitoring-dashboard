@@ -1,6 +1,6 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "Monitor Dashboard",
+  "name": "Real-time Monitoring Dashboard",
   "icons": [
     {
       "src": "favicon.ico",
