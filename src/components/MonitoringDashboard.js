@@ -7,87 +7,75 @@ const MonitoringDashboard = () => {
   const [metrics, setMetrics] = useState({});
   const [newMonitor, setNewMonitor] = useState({ name: '', url: '', interval: 60 });
   const [showAddForm, setShowAddForm] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState('Connecting...');
+  const [connectionStatus, setConnectionStatus] = useState('Polling...');
   const [isLoading, setIsLoading] = useState(false);
 
   // Use environment variables for API URLs, fallback to localhost for development
   const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8080/api/v1";
-  const WS_BASE_URL = process.env.REACT_APP_WS_URL || "ws://localhost:8080/ws";
 
   // -----------------------------
-  // WebSocket connection
+  // Polling for real-time updates
   // -----------------------------
   useEffect(() => {
-    let reconnectTimeout;
+    let pollInterval;
 
-    const connectWebSocket = () => {
+    const pollForUpdates = async () => {
       try {
-        const websocket = new WebSocket(WS_BASE_URL);
+        // Fetch latest monitors data
+        const response = await fetch(`${API_BASE_URL}/monitors`);
+        if (response.ok) {
+          const data = await response.json();
+          const monitorsArray = data.data || data || [];
+          if (Array.isArray(monitorsArray)) {
+            setMonitors(monitorsArray);
+            setConnectionStatus('Connected');
+          }
+        }
 
-        websocket.onopen = () => {
-          setConnectionStatus('Connected');
-          if (reconnectTimeout) clearTimeout(reconnectTimeout);
-        };
-
-        websocket.onmessage = (event) => {
+        // Fetch latest metrics for each monitor
+        for (const monitor of monitors) {
           try {
-            const data = JSON.parse(event.data);
-
-            if (data.type === 'metric_update') {
-              const metric = data.data;
-              setMetrics(prev => ({
-                ...prev,
-                [metric.monitor_id]: {
-                  ...prev[metric.monitor_id],
-                  latest: metric,
-                  history: [...(prev[metric.monitor_id]?.history || []).slice(-19), {
-                    time: new Date(metric.timestamp).toLocaleTimeString(),
-                    response_time: metric.response_time,
-                    status: metric.status_code
-                  }]
-                }
-              }));
-            } else if (data.type === 'monitor_status') {
-              const status = data.data;
-              setMonitors(prev => prev.map(monitor =>
-                monitor.id === status.monitor_id
-                  ? { ...monitor, status: status.status }
-                  : monitor
-              ));
+            const metricsResponse = await fetch(`${API_BASE_URL}/monitors/${monitor.id}/metrics?hours=1`);
+            if (metricsResponse.ok) {
+              const metricsData = await metricsResponse.json();
+              const metricsArray = metricsData.data || [];
+              
+              if (metricsArray.length > 0) {
+                const latestMetric = metricsArray[metricsArray.length - 1];
+                setMetrics(prev => ({
+                  ...prev,
+                  [monitor.id]: {
+                    ...prev[monitor.id],
+                    latest: latestMetric,
+                    history: metricsArray.slice(-20).map(metric => ({
+                      time: new Date(metric.timestamp).toLocaleTimeString(),
+                      response_time: metric.response_time,
+                      status: metric.status_code
+                    }))
+                  }
+                }));
+              }
             }
           } catch (error) {
-            console.error('WebSocket message error:', error);
+            console.error(`Error fetching metrics for monitor ${monitor.id}:`, error);
           }
-        };
-
-        websocket.onclose = (event) => {
-          setConnectionStatus('Disconnected');
-          if (event.code !== 1000) {
-            reconnectTimeout = setTimeout(connectWebSocket, 3000);
-          }
-        };
-
-        websocket.onerror = (error) => {
-          setConnectionStatus('Error');
-          console.error('WebSocket error:', error);
-        };
-
-        return websocket;
+        }
       } catch (error) {
-        console.error('Failed to create WebSocket connection:', error);
+        console.error('Polling error:', error);
         setConnectionStatus('Error');
-        reconnectTimeout = setTimeout(connectWebSocket, 5000);
       }
     };
 
-    const websocket = connectWebSocket();
+    // Start polling every 5 seconds
+    pollInterval = setInterval(pollForUpdates, 5000);
+
+    // Initial poll
+    pollForUpdates();
 
     return () => {
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
-      if (websocket) websocket.close(1000, 'Component unmounting');
+      if (pollInterval) clearInterval(pollInterval);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [monitors.length]); // Re-run when monitors change
 
   // -----------------------------
   // Fetch monitors
@@ -110,9 +98,7 @@ const MonitoringDashboard = () => {
     }
   }, [API_BASE_URL]);
 
-  useEffect(() => {
-    fetchMonitors();
-  }, [fetchMonitors]);
+  // Initial fetch is now handled by polling useEffect above
 
   // -----------------------------
   // Add / Delete Monitor
@@ -206,14 +192,14 @@ const MonitoringDashboard = () => {
             <div className="flex items-center gap-4">
               <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm ${connectionStatus === 'Connected'
                 ? 'bg-green-100 text-green-700'
-                : connectionStatus === 'Connecting...'
-                  ? 'bg-yellow-100 text-yellow-700'
+                : connectionStatus === 'Polling...'
+                  ? 'bg-blue-100 text-blue-700'
                   : 'bg-red-100 text-red-700'
                 }`}>
                 <div className={`w-2 h-2 rounded-full ${connectionStatus === 'Connected'
                   ? 'bg-green-500 animate-pulse'
-                  : connectionStatus === 'Connecting...'
-                    ? 'bg-yellow-500 animate-pulse'
+                  : connectionStatus === 'Polling...'
+                    ? 'bg-blue-500 animate-pulse'
                     : 'bg-red-500'
                   }`} />
                 {connectionStatus}
