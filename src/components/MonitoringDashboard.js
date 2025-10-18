@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { AlertCircle, CheckCircle, Clock, Plus, Trash2, Activity } from 'lucide-react';
 
@@ -7,7 +7,6 @@ const MonitoringDashboard = () => {
   const [metrics, setMetrics] = useState({});
   const [newMonitor, setNewMonitor] = useState({ name: '', url: '', interval: 60 });
   const [showAddForm, setShowAddForm] = useState(false);
-  const [ws, setWs] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState('Connecting...');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -15,7 +14,9 @@ const MonitoringDashboard = () => {
   const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8080/api/v1";
   const WS_BASE_URL = process.env.REACT_APP_WS_URL || "ws://localhost:8080/ws";
 
+  // -----------------------------
   // WebSocket connection
+  // -----------------------------
   useEffect(() => {
     let reconnectTimeout;
 
@@ -25,11 +26,7 @@ const MonitoringDashboard = () => {
 
         websocket.onopen = () => {
           setConnectionStatus('Connected');
-          console.log('WebSocket connected');
-          // Clear any reconnection timeout
-          if (reconnectTimeout) {
-            clearTimeout(reconnectTimeout);
-          }
+          if (reconnectTimeout) clearTimeout(reconnectTimeout);
         };
 
         websocket.onmessage = (event) => {
@@ -65,14 +62,8 @@ const MonitoringDashboard = () => {
 
         websocket.onclose = (event) => {
           setConnectionStatus('Disconnected');
-          console.log('WebSocket disconnected:', event.code, event.reason);
-
-          // Attempt to reconnect after 3 seconds if not a clean close
           if (event.code !== 1000) {
-            reconnectTimeout = setTimeout(() => {
-              console.log('Attempting to reconnect WebSocket...');
-              connectWebSocket();
-            }, 3000);
+            reconnectTimeout = setTimeout(connectWebSocket, 3000);
           }
         };
 
@@ -81,82 +72,59 @@ const MonitoringDashboard = () => {
           console.error('WebSocket error:', error);
         };
 
-        setWs(websocket);
-
         return websocket;
       } catch (error) {
         console.error('Failed to create WebSocket connection:', error);
         setConnectionStatus('Error');
-
-        // Retry connection after 5 seconds
-        reconnectTimeout = setTimeout(() => {
-          connectWebSocket();
-        }, 5000);
+        reconnectTimeout = setTimeout(connectWebSocket, 5000);
       }
     };
 
     const websocket = connectWebSocket();
 
     return () => {
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout);
-      }
-      if (websocket) {
-        websocket.close(1000, 'Component unmounting');
-      }
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (websocket) websocket.close(1000, 'Component unmounting');
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // -----------------------------
   // Fetch monitors
-  useEffect(() => {
-    fetchMonitors();
-  }, [fetchMonitors]);
-
-  const fetchMonitors = async () => {
+  // -----------------------------
+  const fetchMonitors = useCallback(async () => {
     try {
       setIsLoading(true);
       const response = await fetch(`${API_BASE_URL}/monitors`);
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
       const data = await response.json();
-      console.log('Fetched monitors:', data);
-
-      // Handle both possible response formats with better validation
       const monitorsArray = data.data || data || [];
-
-      // Ensure we always set an array
-      if (Array.isArray(monitorsArray)) {
-        setMonitors(monitorsArray);
-      } else {
-        console.warn('API returned non-array data:', monitorsArray);
-        setMonitors([]);
-      }
+      setMonitors(Array.isArray(monitorsArray) ? monitorsArray : []);
     } catch (error) {
       console.error("Fetch monitors failed:", error);
-      setMonitors([]); // Always ensure it's an array
+      setMonitors([]);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [API_BASE_URL]);
 
+  useEffect(() => {
+    fetchMonitors();
+  }, [fetchMonitors]);
 
+  // -----------------------------
+  // Add / Delete Monitor
+  // -----------------------------
   const addMonitor = async () => {
-    if (!newMonitor.name || !newMonitor.url) {
-      alert('Please fill in all required fields');
-      return;
-    }
+    if (!newMonitor.name || !newMonitor.url) return alert('Please fill in all required fields');
 
     try {
       setIsLoading(true);
       const response = await fetch(`${API_BASE_URL}/monitors`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: newMonitor.name,
           url: newMonitor.url,
@@ -169,13 +137,9 @@ const MonitoringDashboard = () => {
         throw new Error(`HTTP error! status: ${response.status}, message: ${errorData}`);
       }
 
-      const result = await response.json();
-      console.log('Monitor added:', result);
-
       setNewMonitor({ name: '', url: '', interval: 60 });
       setShowAddForm(false);
-      await fetchMonitors(); // Refresh the list
-
+      fetchMonitors();
     } catch (error) {
       console.error('Error adding monitor:', error);
       alert(`Failed to add monitor: ${error.message}`);
@@ -185,30 +149,20 @@ const MonitoringDashboard = () => {
   };
 
   const deleteMonitor = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this monitor?')) {
-      return;
-    }
+    if (!window.confirm('Are you sure you want to delete this monitor?')) return;
 
     try {
       setIsLoading(true);
-      const response = await fetch(`${API_BASE_URL}/monitors/${id}`, {
-        method: 'DELETE',
-      });
+      const response = await fetch(`${API_BASE_URL}/monitors/${id}`, { method: 'DELETE' });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
-      console.log('Monitor deleted:', id);
-      await fetchMonitors(); // Refresh the list
-
-      // Clean up metrics for deleted monitor
+      fetchMonitors();
       setMetrics(prev => {
         const newMetrics = { ...prev };
         delete newMetrics[id];
         return newMetrics;
       });
-
     } catch (error) {
       console.error('Error deleting monitor:', error);
       alert(`Failed to delete monitor: ${error.message}`);
@@ -217,6 +171,9 @@ const MonitoringDashboard = () => {
     }
   };
 
+  // -----------------------------
+  // Helpers
+  // -----------------------------
   const getStatusColor = (status) => {
     switch (status) {
       case 'active': return 'text-green-600';
@@ -233,7 +190,6 @@ const MonitoringDashboard = () => {
       default: return <Clock className="w-5 h-5" />;
     }
   };
-
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
