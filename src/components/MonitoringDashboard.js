@@ -75,7 +75,7 @@ const MonitoringDashboard = () => {
     return () => {
       if (pollInterval) clearInterval(pollInterval);
     };
-  }, [monitors.length]); // Re-run when monitors change
+  },[API_BASE_URL, monitors]); // Re-run when monitors change
 
   // -----------------------------
   // Fetch monitors
