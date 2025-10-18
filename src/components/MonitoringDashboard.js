@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { AlertCircle, CheckCircle, Clock, Plus, Trash2, Activity } from 'lucide-react';
 
 const MonitoringDashboard = () => {
@@ -8,7 +8,6 @@ const MonitoringDashboard = () => {
   const [newMonitor, setNewMonitor] = useState({ name: '', url: '', interval: 60 });
   const [showAddForm, setShowAddForm] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState('Connecting...');
-  const [ws, setWs] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
   // Use environment variables for API URLs, fallback to localhost for development
@@ -105,12 +104,13 @@ const MonitoringDashboard = () => {
         websocket.close(1000, 'Component unmounting');
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Fetch monitors
   useEffect(() => {
     fetchMonitors();
-  }, []);
+  }, [fetchMonitors]);
 
   const fetchMonitors = async () => {
     try {
