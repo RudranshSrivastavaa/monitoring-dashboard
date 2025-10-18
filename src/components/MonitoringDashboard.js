@@ -7,6 +7,7 @@ const MonitoringDashboard = () => {
   const [metrics, setMetrics] = useState({});
   const [newMonitor, setNewMonitor] = useState({ name: '', url: '', interval: 60 });
   const [showAddForm, setShowAddForm] = useState(false);
+  const [ws, setWs] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState('Connecting...');
   const [isLoading, setIsLoading] = useState(false);
 
