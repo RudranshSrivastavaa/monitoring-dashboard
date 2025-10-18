@@ -11,7 +11,9 @@ const MonitoringDashboard = () => {
   const [ws, setWs] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const API_BASE_URL = "http://localhost:8080/api/v1";
+  // Use environment variables for API URLs, fallback to localhost for development
+  const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8080/api/v1";
+  const WS_BASE_URL = process.env.REACT_APP_WS_URL || "ws://localhost:8080/ws";
 
   // WebSocket connection
   useEffect(() => {
@@ -19,7 +21,7 @@ const MonitoringDashboard = () => {
 
     const connectWebSocket = () => {
       try {
-        const websocket = new WebSocket('ws://localhost:8080/ws');
+        const websocket = new WebSocket(WS_BASE_URL);
 
         websocket.onopen = () => {
           setConnectionStatus('Connected');
