@@ -22,6 +22,6 @@
     }
   ],
   "env": {
-    "REACT_APP_API_URL": "https://monitoring-tool-backend.onrender.com"
+    "REACT_APP_API_URL": "https://real-time-monitoring-tool.onrender.com"
   }
 }
